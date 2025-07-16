@@ -1,5 +1,5 @@
 #MATLAB Preferences
-#Tue Jul 15 12:09:08 EDT 2025
+#Wed Jul 16 15:44:14 EDT 2025
 DeploytoollastOpenFile=S
 RLHiddenB2_WB_2014b_1=I16376
 CommandWindowClearConfirmation=Btrue
@@ -36,8 +36,8 @@ ReplaceSearchText15=S
 ReplaceSearchText14=S
 ReplaceSearchText17=S
 ReplaceSearchText16=S
-MatlabExitConfirm=Bfalse
 ReplaceSearchText9=S
+MatlabExitConfirm=Bfalse
 RLOrderB2_VE_2014b_1=S0:1:
 ReplaceSearchText2=Straining_data
 ReplaceSearchText3=SError using  .  (line 229)
@@ -67,13 +67,13 @@ ReplaceText10=S
 ReplaceText11=S
 ReplaceText20=S
 FindFilesShowFullPathState=Bfalse
-EditorMRU2=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/AnnotateGui.asv
-EditorMRU1=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Classification/training_data_multi_label_A.mat
+EditorMRU2=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Classification/training_data_multi_label_A.mat
+EditorMRU1=S/Users/jaypatel/Desktop/PVes-Annotator/AnnotateGui.m
 RLPrevInitB2_VE_2014b_1=Btrue
 FindFilesIncludeSubdirs=Bfalse
-EditorMRU4=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Classification/extract_annotated_data.m
-EditorMRU3=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Classification/featureExtraction_OnlyA.m
-EditorMRU6=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Feature Extraction/featureExtraction2A.m
-EditorMRU5=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Feature Extraction/featureExtractionA.m
-EditorMRU8=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/eventFinder.m
-EditorMRU7=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Feature Extraction/featureAnalysis.m
+EditorMRU4=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Classification/featureExtraction_OnlyA.m
+EditorMRU3=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/AnnotateGui.asv
+EditorMRU6=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Feature Extraction/featureExtractionA.m
+EditorMRU5=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Classification/extract_annotated_data.m
+EditorMRU8=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Feature Extraction/featureAnalysis.m
+EditorMRU7=S/Users/jaypatel/Desktop/APTSUMMER/PVES-classifier/Feature Extraction/featureExtraction2A.m
