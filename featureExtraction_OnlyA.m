@@ -3,14 +3,15 @@
 % Modified to handle both edited_dataset_A and edited_dataset_B
 % Automatically detects and processes both datasets with different column names
 % Creates individual dataset files AND combined files
+% Enhanced to separate features per trial and include pves signal
 
 %% Load and process both datasets
 clear all;
 close all;
 
 % Define dataset files
-dataset_files = {'extracted_trial_data_A.mat', 'extracted_trial_data_B.mat','extracted_trial_data_C.mat'};
-
+dataset_files = {'extracted_trial_data_A.mat','extracted_trial_data_B.mat','extracted_trial_data_C.mat'}
+letters={'A','B','C'}
 % Create empty tables to store combined training data
 training_data = table;
 
@@ -53,6 +54,12 @@ for dataset_idx = 1:length(dataset_files)
     
     % Initialize dataset-specific feature storage
     dataset_training_data = table;
+    
+    % Initialize per-trial storage structures
+    trial_features = cell(numTrials, 1);
+    trial_pves_signals = cell(numTrials, 1);
+    trial_labels = cell(numTrials, 1);
+    trial_metadata = cell(numTrials, 1);
     
     %% Auto-detect column names for different datasets
     % Check first trial to determine column structure
@@ -128,25 +135,38 @@ for dataset_idx = 1:length(dataset_files)
         void = trial_table.(void_col);
         do = trial_table.(do_col);
         
+        % Check if invalid column exists and extract it
+        if any(strcmp(trial_table.Properties.VariableNames, 'invalid'))
+            invalid = trial_table.invalid;
+        else
+            invalid = zeros(size(pves));
+        end
+        
+        % Store original pves signal length before padding
+        original_pves_length = length(pves);
+        
         % Pad signal to fit reshaping (ensure divisible by INTERVAL_SIZE)
         x = mod(-mod(length(pves), INTERVAL_SIZE), INTERVAL_SIZE);
-        pves = [pves' zeros(1, x)]';
+        pves_padded = [pves' zeros(1, x)]';
         
         % Optional: Apply EMA filter (uncomment if needed)
-        % pves = ema_filter(pves, Fc)';
+        % pves_padded = ema_filter(pves_padded, Fc)';
         
-        dwt_size = length(pves);
+        dwt_size = length(pves_padded);
         
         % Process labels - pad and reshape into windows
         % Instead of simple sum, calculate label statistics per window
         abd_padded = [abd' zeros(1, x)]';
         void_padded = [void' zeros(1, x)]';
         do_padded = [do' zeros(1, x)]';
+        invalid_padded = [invalid' zeros(1, x)]';
         
         % Reshape into windows
         abd_windows = reshape(abd_padded, INTERVAL_SIZE, length(abd_padded)/INTERVAL_SIZE);
         void_windows = reshape(void_padded, INTERVAL_SIZE, length(void_padded)/INTERVAL_SIZE);
         do_windows = reshape(do_padded, INTERVAL_SIZE, length(do_padded)/INTERVAL_SIZE);
+        invalid_windows = reshape(invalid_padded, INTERVAL_SIZE, length(invalid_padded)/INTERVAL_SIZE);
+        pves_windows = reshape(pves_padded, INTERVAL_SIZE, length(pves_padded)/INTERVAL_SIZE);
         
         % Calculate label statistics for each window
         num_windows = size(abd_windows, 2);
@@ -165,6 +185,11 @@ for dataset_idx = 1:length(dataset_files)
         abd_count = sum(abd_windows, 1);
         void_count = sum(void_windows, 1);
         do_count = sum(do_windows, 1);
+        
+        % Invalid label processing
+        invalid_binary = sum(invalid_windows, 1) >= 1;
+        invalid_count = sum(invalid_windows, 1);
+        invalid_proportion = sum(invalid_windows, 1) / INTERVAL_SIZE;
         
         % Multi-label statistics
         total_labels_per_window = abd_binary + void_binary + do_binary;
@@ -192,14 +217,25 @@ for dataset_idx = 1:length(dataset_files)
         data_table.total_labels = total_labels_per_window';
         data_table.is_multi_label = (total_labels_per_window > 1)';
         
+        % Add invalid label information
+        data_table.invalid = invalid_binary';
+        data_table.invalid_count = invalid_count';
+        data_table.invalid_proportion = invalid_proportion';
+        
         % Add dataset identifier
         data_table.dataset = repmat(string(dataset_file), num_windows, 1);
+        
+        % Add trial identifier
+        data_table.trial_id = repmat(k, num_windows, 1);
+        
+        % Add window identifier within trial
+        data_table.window_id = (1:num_windows)';
         
         % Create time vector
         time = [0:0.1:(dwt_size - 1)*0.1];
         
         % Compute 5-level DWT
-        [cA1, cD1] = dwt(pves, 'db2', 'mode', 'per');
+        [cA1, cD1] = dwt(pves_padded, 'db2', 'mode', 'per');
         [cA2, cD2] = dwt(cA1, 'db2', 'mode', 'per');
         [cA3, cD3] = dwt(cA2, 'db2', 'mode', 'per');
         [cA4, cD4] = dwt(cA3, 'db2', 'mode', 'per');
@@ -368,6 +404,7 @@ for dataset_idx = 1:length(dataset_files)
         data_table.xcorr4_mean = xcorr4_mean';
         data_table.xcorr4_max = xcorr4_max';
         
+        
         data_table.cA5_max = cA5_max';
         data_table.cA5_mav = cA5_mav';
         data_table.cA5_med = cA5_med';
@@ -380,7 +417,41 @@ for dataset_idx = 1:length(dataset_files)
         data_table.xcorr5_mean = xcorr5_mean';
         data_table.xcorr5_max = xcorr5_max';
         
+        % Store per-trial data
+        trial_features{k} = data_table;
+        trial_pves_signals{k} = struct('original_signal', pves, ...
+                                       'padded_signal', pves_padded, ...
+                                       'windowed_signal', pves_windows, ...
+                                       'original_length', original_pves_length, ...
+                                       'padded_length', dwt_size, ...
+                                       'num_windows', num_windows, ...
+                                       'interval_size', INTERVAL_SIZE);
+        
+        % Store per-trial label information
+        trial_labels{k} = struct('abd_windows', abd_windows, ...
+                                 'void_windows', void_windows, ...
+                                 'do_windows', do_windows, ...
+                                 'abd_binary', abd_binary, ...
+                                 'void_binary', void_binary, ...
+                                 'do_binary', do_binary, ...
+                                 'original_abd', abd, ...
+                                 'original_void', void, ...
+                                 'original_do', do);
+        
+        % Store per-trial metadata
+        trial_metadata{k} = struct('trial_id', k, ...
+                                   'dataset_file', dataset_file, ...
+                                   'column_mapping', struct('pressure', pressure_col, ...
+                                                           'abd', abd_col, ...
+                                                           'void', void_col, ...
+                                                           'do', do_col), ...
+                                   'num_windows', num_windows, ...
+                                   'processing_params', struct('interval_size', INTERVAL_SIZE, ...
+                                                             'fc', Fc));
+        
         % Add to dataset-specific training data
+        dataset_idx
+        writetable(data_table, sprintf('trial_%s_%03d_features.csv', letters{dataset_idx}, k));
         dataset_training_data = [dataset_training_data; data_table];
         
         % Combine with overall training data
@@ -391,21 +462,41 @@ for dataset_idx = 1:length(dataset_files)
     dataset_features{dataset_idx} = dataset_training_data;
     dataset_names{dataset_idx} = dataset_file;
     
-    % Save individual dataset features
+    % Save individual dataset features with per-trial structure
     dataset_name = strrep(dataset_file, '.mat', '');
     dataset_name = strrep(dataset_name, 'extracted_trial_data_', '');
+    
+    % Create comprehensive per-trial structure
+    per_trial_data = struct('trial_features', {trial_features}, ...
+                           'trial_pves_signals', {trial_pves_signals}, ...
+                           'trial_labels', {trial_labels}, ...
+                           'trial_metadata', {trial_metadata}, ...
+                           'combined_features', dataset_training_data, ...
+                           'dataset_info', struct('name', dataset_name, ...
+                                                 'file', dataset_file, ...
+                                                 'num_trials', numTrials, ...
+                                                 'total_windows', size(dataset_training_data, 1)));
     
     % Save individual dataset files with multiple formats
     individual_training_data = dataset_training_data;
     
-    % Multi-label format
-    save(sprintf('training_data_multi_label_%s.mat', dataset_name), 'individual_training_data');
-    fprintf('Saved: training_data_multi_label_%s.mat (%d samples)\n', dataset_name, size(individual_training_data, 1));
+    % Multi-label format with per-trial structure
+    % Remove invalid columns from individual dataset training file
+    individual_training_data_clean = individual_training_data;
+    if any(strcmp(individual_training_data_clean.Properties.VariableNames, 'invalid'))
+        individual_training_data_clean = removevars(individual_training_data_clean, {'invalid', 'invalid_count', 'invalid_proportion'});
+    end
     
-    % Single class format (remove multi-label specific columns)
+    training_data_multi_label_with_trials = struct('per_trial_data', per_trial_data, ...
+                                                   'combined_features', individual_training_data_clean);
+    save(sprintf('training_data_multi_label_%s.mat', dataset_name), 'training_data_multi_label_with_trials');
+    fprintf('Saved: training_data_multi_label_%s.mat (%d samples from %d trials)\n', dataset_name, size(individual_training_data_clean, 1), numTrials);
+    
+    % Single class format (remove multi-label specific columns and invalid columns)
     individual_training_data_single = removevars(individual_training_data, ...
         {'abd_proportion', 'void_proportion', 'do_proportion', ...
-         'abd_count', 'void_count', 'do_count', 'total_labels', 'is_multi_label', 'dataset'});
+         'abd_count', 'void_count', 'do_count', 'total_labels', 'is_multi_label', 'dataset', ...
+         'invalid', 'invalid_count', 'invalid_proportion'});
     save(sprintf('training_data_single_class_%s.mat', dataset_name), 'individual_training_data_single');
     fprintf('Saved: training_data_single_class_%s.mat (%d samples)\n', dataset_name, size(individual_training_data_single, 1));
     
@@ -468,15 +559,20 @@ end
 
 % Training data for multi-label classification (preserves all label information)
 training_data_multi_label = training_data;
+% Remove invalid columns from training dataset
+if any(strcmp(training_data_multi_label.Properties.VariableNames, 'invalid'))
+    training_data_multi_label = removevars(training_data_multi_label, {'invalid', 'invalid_count', 'invalid_proportion'});
+end
 save training_data_multi_label_combined.mat training_data_multi_label;
 fprintf('\nSaved: training_data_multi_label_combined.mat\n');
 
 % Training data for binary classification for each class (original approach)
 training_data_single_class = training_data;
-% Remove the additional multi-label features and dataset identifier for compatibility
+% Remove the additional multi-label features, dataset identifier, and invalid columns for compatibility
 training_data_single_class = removevars(training_data_single_class, ...
     {'abd_proportion', 'void_proportion', 'do_proportion', ...
-     'abd_count', 'void_count', 'do_count', 'total_labels', 'is_multi_label', 'dataset'});
+     'abd_count', 'void_count', 'do_count', 'total_labels', 'is_multi_label', 'dataset', ...
+     'invalid', 'invalid_count', 'invalid_proportion'});
 save training_data_single_class_combined.mat training_data_single_class;
 fprintf('Saved: training_data_single_class_combined.mat\n');
 
@@ -624,6 +720,11 @@ end
 % Create balanced multi-label dataset
 training_data_multi_label_balanced = training_data(selected_indices, :);
 
+% Remove invalid columns from balanced training dataset
+if any(strcmp(training_data_multi_label_balanced.Properties.VariableNames, 'invalid'))
+    training_data_multi_label_balanced = removevars(training_data_multi_label_balanced, {'invalid', 'invalid_count', 'invalid_proportion'});
+end
+
 % Shuffle the final dataset
 training_data_multi_label_balanced = training_data_multi_label_balanced(randperm(size(training_data_multi_label_balanced, 1)), :);
 
@@ -654,6 +755,10 @@ fprintf('  Balance ratio: %.3f (1.0 = perfectly balanced)\n', balance_ratio);
 multi_label_indices = find(training_data.is_multi_label == 1);
 if ~isempty(multi_label_indices)
     training_data_multi_label_only = training_data(multi_label_indices, :);
+    % Remove invalid columns from multi-label only training dataset
+    if any(strcmp(training_data_multi_label_only.Properties.VariableNames, 'invalid'))
+        training_data_multi_label_only = removevars(training_data_multi_label_only, {'invalid', 'invalid_count', 'invalid_proportion'});
+    end
     save training_data_multi_label_only.mat training_data_multi_label_only;
     fprintf('Saved: training_data_multi_label_only.mat (%d multi-label samples)\n', length(multi_label_indices));
 else
